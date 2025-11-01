@@ -1,6 +1,4 @@
 import logging
-from simple_settings import LazySettings
-
-settings = LazySettings("settings")
+from . import settings
 
 logging.basicConfig(filename='abracadabra.log', level=logging.DEBUG)

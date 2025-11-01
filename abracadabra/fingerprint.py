@@ -1,4 +1,8 @@
 import uuid
+import logging
+import subprocess
+import tempfile
+import os
 import numpy as np
 from . import settings
 from pydub import AudioSegment
@@ -23,7 +27,31 @@ def file_to_spectrogram(filename):
               * t - list of times
               * Sxx - Power value for each time/frequency pair
     """
-    a = AudioSegment.from_file(filename).set_channels(1).set_frame_rate(settings.SAMPLE_RATE)
+    try:
+        # Try to load the file directly
+        a = AudioSegment.from_file(filename).set_channels(1).set_frame_rate(settings.SAMPLE_RATE)
+    except Exception as e:
+        # If direct loading fails, check if it's an ADPCM WAV file
+        # and convert it to PCM first using ffmpeg directly
+        if str(e).find('pcm_s4le') != -1 or str(e).find('adpcm') != -1:
+            # Create a temporary PCM WAV file
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
+                tmp_filename = tmp.name
+
+            try:
+                # Convert ADPCM to PCM using ffmpeg
+                cmd = ['ffmpeg', '-i', filename, '-acodec', 'pcm_s16le', '-y', tmp_filename]
+                subprocess.run(cmd, check=True, capture_output=True)
+
+                # Load the converted file
+                a = AudioSegment.from_file(tmp_filename).set_channels(1).set_frame_rate(settings.SAMPLE_RATE)
+            finally:
+                # Clean up temporary file
+                if os.path.exists(tmp_filename):
+                    os.unlink(tmp_filename)
+        else:
+            raise
+
     audio = np.frombuffer(a.raw_data, np.int16)
     return my_spectrogram(audio)
 

@@ -14,13 +14,39 @@ KNOWN_EXTENSIONS = ["mp3", "wav", "flac", "m4a"]
 def get_song_info(filename):
     """Gets the ID3 tags for a file. Returns None for tuple values that don't exist.
 
+    If the file has no embedded metadata tags, attempts to extract metadata from
+    the filename pattern: <id>__<artist>__<title>.ext
+
     :param filename: Path to the file with tags to read
     :returns: (artist, album, title)
     :rtype: tuple(str/None, str/None, str/None)
     """
     tag = TinyTag.get(filename)
     artist = tag.artist if tag.albumartist is None else tag.albumartist
-    return (artist, tag.album, tag.title)
+    album = tag.album
+    title = tag.title
+
+    # If no metadata tags, try to extract from filename
+    if artist is None and title is None:
+        basename = os.path.basename(filename)
+        name_without_ext = os.path.splitext(basename)[0]
+
+        # Pattern: <id>__<artist>__<title> (common in freesound.org samples)
+        parts = name_without_ext.split('__')
+
+        if len(parts) >= 3:
+            # Has the pattern: id__artist__title
+            artist = parts[1].replace('-', ' ')
+            title = parts[2].replace('-', ' ')
+        elif len(parts) == 2:
+            # Has pattern: artist__title (no id)
+            artist = parts[0].replace('-', ' ')
+            title = parts[1].replace('-', ' ')
+        else:
+            # No pattern, use full name as title
+            title = name_without_ext.replace('-', ' ').replace('_', ' ')
+
+    return (artist, album, title)
 
 
 def register_song(filename):
