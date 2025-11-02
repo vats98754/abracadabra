@@ -3,7 +3,7 @@ services:
     name: omi-webhook
     runtime: python
     plan: free
-    buildCommand: pip install -r requirements-webhook.txt && pip install -e . --no-deps && song_recogniser initialise || echo "Database will initialize at runtime"
+    buildCommand: pip install -r requirements-webhook.txt && pip install -e . --no-deps
     startCommand: uvicorn omi_song_recognition_webhook:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:

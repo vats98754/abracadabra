@@ -48,12 +48,37 @@ MAX_BUFFER_DURATION = int(os.getenv("MAX_BUFFER_DURATION", "60"))
 # Path to abracadabra installation
 ABRACADABRA_PATH = os.getenv("ABRACADABRA_PATH", "/Users/anvayvats/abracadabra")
 
+# Import Supabase storage module
+import sys
+sys.path.insert(0, ABRACADABRA_PATH)
+import supabase_storage
+
 # Validate credentials on startup
 if not OMI_APP_ID or not OMI_API_KEY:
     logger.warning("⚠️  OMI_APP_ID and OMI_API_KEY not set. Notifications will not be sent.")
     logger.warning("   Set these in .env file or environment variables.")
 else:
     logger.info(f"✅ Omi app configured with ID: {OMI_APP_ID}")
+
+# Validate Supabase configuration
+if not supabase_storage.supabase:
+    logger.error("❌ SUPABASE_URL and SUPABASE_KEY must be set in environment variables")
+    logger.error("   The webhook requires Supabase for persistent storage.")
+else:
+    logger.info(f"✅ Supabase connected: {os.getenv('SUPABASE_URL')}")
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize Supabase tables on startup"""
+    logger.info("🚀 Starting Omi Song Recognition Webhook...")
+
+    if supabase_storage.supabase:
+        logger.info("📝 Initializing Supabase tables...")
+        logger.info("If tables don't exist, run this SQL in Supabase SQL Editor:")
+        logger.info(supabase_storage.SCHEMA_SQL)
+    else:
+        logger.warning("⚠️  Supabase not configured - storage will not work!")
 
 
 def create_wav_file(audio_bytes: bytes, sample_rate: int, output_path: str):
@@ -81,6 +106,8 @@ def recognize_song(audio_file: str) -> dict:
     """
     Use abracadabra to recognize the song.
 
+    Uses abracadabra fingerprinting with Supabase storage backend.
+
     Args:
         audio_file: Path to audio file
 
@@ -88,43 +115,40 @@ def recognize_song(audio_file: str) -> dict:
         dict with keys: artist, album, title, confidence, score
     """
     try:
-        # Run song_recogniser command
-        cmd = ['song_recogniser', 'recognise', audio_file]
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            cwd=ABRACADABRA_PATH,
-            timeout=30
-        )
+        # Import abracadabra fingerprinting module
+        from abracadabra import fingerprint
 
-        if result.returncode != 0:
-            logger.error(f"Recognition failed: {result.stderr}")
+        # Generate fingerprint for the audio file
+        logger.info(f"Generating fingerprint for: {audio_file}")
+        sample_fingerprint = fingerprint.from_file(audio_file)
+
+        if not sample_fingerprint or len(sample_fingerprint) == 0:
+            logger.error("Failed to generate fingerprint")
             return None
 
-        # Parse output: ('artist', 'album', 'title')
-        output = result.stdout.strip()
-        logger.info(f"Recognition output: {output}")
+        # Match against Supabase database
+        logger.info(f"Matching {len(sample_fingerprint)} fingerprints against Supabase")
+        matches = supabase_storage.get_matches_supabase(sample_fingerprint)
 
-        # Parse the tuple format
-        import ast
-        artist, album, title = ast.literal_eval(output)
+        if not matches:
+            logger.info("No matches found in database")
+            return None
 
-        # Get detailed scores using detailed_recognition.py
-        cmd_detailed = [
-            'python',
-            f'{ABRACADABRA_PATH}/detailed_recognition.py',
-            audio_file
-        ]
-        result_detailed = subprocess.run(
-            cmd_detailed,
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
+        # Get best match
+        from collections import Counter
+        song_counts = Counter(matches)
+        best_match = song_counts.most_common(1)[0]
+        song_id, score = best_match
 
-        # Extract score from output
-        score = parse_score_from_output(result_detailed.stdout)
+        logger.info(f"Best match: song_id={song_id}, score={score}")
+
+        # Get song metadata from Supabase
+        song_info = supabase_storage.get_song_info_supabase(song_id)
+        if not song_info:
+            logger.error(f"Song {song_id} not found in database")
+            return None
+
+        artist, album, title = song_info
         confidence = calculate_confidence(score)
 
         return {
@@ -136,11 +160,11 @@ def recognize_song(audio_file: str) -> dict:
             'recognized': confidence > 0.5
         }
 
-    except subprocess.TimeoutExpired:
-        logger.error("Recognition timeout")
+    except ImportError as e:
+        logger.error(f"Failed to import abracadabra modules: {e}")
         return None
     except Exception as e:
-        logger.error(f"Error recognizing song: {e}")
+        logger.error(f"Error recognizing song: {e}", exc_info=True)
         return None
 
 
@@ -459,38 +483,66 @@ async def register_song(
             os.rename(tmp_path, new_path)
             tmp_path = new_path
 
-        # Register song using song_recogniser
-        cmd = ['song_recogniser', 'register', tmp_path]
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            cwd=ABRACADABRA_PATH,
-            timeout=120
-        )
+        # Register song using abracadabra with Supabase storage
+        try:
+            from abracadabra import fingerprint
+            from abracadabra.recognise import get_song_info
 
-        # Clean up
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+            # Generate fingerprints
+            logger.info(f"Generating fingerprints for: {tmp_path}")
+            song_fingerprint = fingerprint.from_file(tmp_path)
 
-        if result.returncode == 0:
-            logger.info(f"✅ Song registered: {artist or 'Unknown'} - {title or 'Unknown'}")
+            if not song_fingerprint:
+                raise Exception("Failed to generate fingerprints")
+
+            # Get song info from filename/metadata
+            song_info = get_song_info(tmp_path)
+            artist_meta, album_meta, title_meta = song_info
+
+            # Use provided metadata or fallback to extracted
+            final_artist = artist or artist_meta or "Unknown"
+            final_album = album_meta or "Unknown"
+            final_title = title or title_meta or os.path.splitext(file.filename)[0]
+
+            # Generate song ID
+            song_id = supabase_storage.get_song_id_from_path(tmp_path)
+
+            # Store in Supabase database
+            logger.info(f"Storing {len(song_fingerprint)} fingerprints in Supabase for: {final_artist} - {final_title}")
+            success = supabase_storage.store_song_complete(
+                song_id, song_fingerprint, final_artist, final_album, final_title
+            )
+
+            # Clean up
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+            if not success:
+                raise Exception("Failed to store song in Supabase")
+
+            logger.info(f"✅ Song registered in Supabase: {final_artist} - {final_title}")
             return JSONResponse(
                 content={
                     "status": "success",
-                    "message": f"Song registered: {artist or 'Unknown'} - {title or 'Unknown'}",
-                    "artist": artist,
-                    "title": title
+                    "message": f"Song registered: {final_artist} - {final_title}",
+                    "artist": final_artist,
+                    "title": final_title,
+                    "fingerprints": len(song_fingerprint),
+                    "song_id": song_id
                 },
                 status_code=200
             )
-        else:
-            logger.error(f"Failed to register song: {result.stderr}")
+
+        except Exception as e:
+            # Clean up on error
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+            logger.error(f"Failed to register song: {e}", exc_info=True)
             return JSONResponse(
                 content={
                     "status": "error",
-                    "message": result.stderr,
-                    "output": result.stdout
+                    "message": str(e)
                 },
                 status_code=500
             )
@@ -506,31 +558,19 @@ async def register_song(
 @app.get("/songs")
 async def list_songs():
     """
-    List all registered songs in the database.
+    List all registered songs in the Supabase database.
     """
     try:
-        import sqlite3
-        db_path = os.path.join(ABRACADABRA_PATH, 'abracadabra.db')
-
-        if not os.path.exists(db_path):
-            return JSONResponse(
-                content={"status": "error", "message": "Database not initialized"},
-                status_code=404
-            )
-
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        cursor.execute("SELECT artist, album, title FROM song_info")
-        songs = cursor.fetchall()
-        conn.close()
+        # Get all songs from Supabase
+        songs_list = supabase_storage.get_all_songs_supabase()
 
         return JSONResponse(
             content={
                 "status": "success",
-                "count": len(songs),
+                "count": len(songs_list),
                 "songs": [
                     {"artist": s[0], "album": s[1], "title": s[2]}
-                    for s in songs
+                    for s in songs_list
                 ]
             },
             status_code=200
