@@ -18,34 +18,28 @@ else:
     supabase = None
 
 # SQL schema for Supabase tables
-# Matches abracadabra's SQLite structure:
-#   SQLite "hash" table → Supabase "fingerprints" table (hash int, offset real, song_id text)
-#   SQLite "song_info" table → Supabase "songs" table (artist text, album text, title text, song_id text)
+# Uses EXACT same names as abracadabra's SQLite structure:
+#   "hash" table (hash int, offset real, song_id text)
+#   "song_info" table (artist text, album text, title text, song_id text)
 SCHEMA_SQL = """
--- Songs table (matches song_info)
-CREATE TABLE IF NOT EXISTS songs (
-    id SERIAL PRIMARY KEY,
-    song_id TEXT UNIQUE NOT NULL,
+-- song_info table (EXACT MATCH to SQLite)
+CREATE TABLE IF NOT EXISTS song_info (
     artist TEXT,
     album TEXT,
     title TEXT,
-    created_at TIMESTAMP DEFAULT NOW()
+    song_id TEXT
 );
 
--- Fingerprints table (matches hash table)
--- IMPORTANT: time_offset is DOUBLE PRECISION (not INTEGER) for floating-point time values
-CREATE TABLE IF NOT EXISTS fingerprints (
-    id SERIAL PRIMARY KEY,
+-- hash table (EXACT MATCH to SQLite)
+-- IMPORTANT: offset is DOUBLE PRECISION (not INTEGER) for floating-point time values
+CREATE TABLE IF NOT EXISTS hash (
     hash BIGINT NOT NULL,
-    time_offset DOUBLE PRECISION NOT NULL,
-    song_id TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW(),
-    FOREIGN KEY (song_id) REFERENCES songs(song_id) ON DELETE CASCADE
+    offset DOUBLE PRECISION NOT NULL,
+    song_id TEXT NOT NULL
 );
 
--- Indexes for fast lookup
-CREATE INDEX IF NOT EXISTS idx_fingerprints_hash ON fingerprints(hash);
-CREATE INDEX IF NOT EXISTS idx_fingerprints_song_id ON fingerprints(song_id);
+-- Index for fast lookup
+CREATE INDEX IF NOT EXISTS idx_hash ON hash(hash);
 """
 
 def init_supabase_tables():
@@ -77,7 +71,7 @@ def store_song_supabase(song_id: str, artist: str, album: str, title: str):
             "album": album,
             "title": title
         }
-        result = supabase.table("songs").upsert(data).execute()
+        result = supabase.table("song_info").upsert(data).execute()
         return True
     except Exception as e:
         print(f"Error storing song: {e}")
@@ -93,7 +87,7 @@ def store_fingerprints_supabase(song_id: str, fingerprints: List[Tuple[int, int]
         data = [
             {
                 "hash": fp_hash,
-                "time_offset": time_offset,
+                "offset": time_offset,
                 "song_id": song_id
             }
             for fp_hash, time_offset in fingerprints
@@ -103,7 +97,7 @@ def store_fingerprints_supabase(song_id: str, fingerprints: List[Tuple[int, int]
         batch_size = 1000
         for i in range(0, len(data), batch_size):
             batch = data[i:i+batch_size]
-            supabase.table("fingerprints").insert(batch).execute()
+            supabase.table("hash").insert(batch).execute()
 
         return True
     except Exception as e:
@@ -116,7 +110,7 @@ def get_song_by_id_supabase(song_id: str) -> Optional[Tuple[str, str, str]]:
         return None
 
     try:
-        result = supabase.table("songs").select("*").eq("song_id", song_id).execute()
+        result = supabase.table("song_info").select("*").eq("song_id", song_id).execute()
         if result.data and len(result.data) > 0:
             song = result.data[0]
             return (song['artist'], song['album'], song['title'])
@@ -131,7 +125,7 @@ def list_all_songs_supabase() -> List[Tuple[str, str, str]]:
         return []
 
     try:
-        result = supabase.table("songs").select("artist,album,title").execute()
+        result = supabase.table("song_info").select("artist,album,title").execute()
         return [(s['artist'], s['album'], s['title']) for s in result.data]
     except Exception as e:
         print(f"Error listing songs: {e}")
@@ -162,7 +156,7 @@ def get_matches_supabase(fingerprints: List[Tuple[int, int]]) -> List[str]:
 
         for i in range(0, len(hashes), batch_size):
             batch_hashes = hashes[i:i+batch_size]
-            result = supabase.table("fingerprints").select("song_id").in_("hash", batch_hashes).execute()
+            result = supabase.table("hash").select("song_id").in_("hash", batch_hashes).execute()
 
             if result.data:
                 all_matches.extend([row['song_id'] for row in result.data])
