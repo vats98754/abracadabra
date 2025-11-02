@@ -120,7 +120,7 @@ def recognize_song(audio_file: str) -> dict:
 
         # Generate fingerprint for the audio file
         logger.info(f"Generating fingerprint for: {audio_file}")
-        sample_fingerprint = fingerprint.from_file(audio_file)
+        sample_fingerprint = fingerprint.fingerprint_file(audio_file)
 
         if not sample_fingerprint or len(sample_fingerprint) == 0:
             logger.error("Failed to generate fingerprint")
@@ -490,7 +490,7 @@ async def register_song(
 
             # Generate fingerprints
             logger.info(f"Generating fingerprints for: {tmp_path}")
-            song_fingerprint = fingerprint.from_file(tmp_path)
+            song_fingerprint = fingerprint.fingerprint_file(tmp_path)
 
             if not song_fingerprint:
                 raise Exception("Failed to generate fingerprints")
