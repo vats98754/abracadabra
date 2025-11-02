@@ -8,3 +8,8 @@ tags
 abracadabra.egg-info/
 *.log
 /build
+hash.sql
+**hash.sql
+**hash.db*
+**node_modules*
+**package*

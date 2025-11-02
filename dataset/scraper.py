@@ -55,16 +55,10 @@ def main():
             {
                 "key": "FFmpegExtractAudio",
                 "preferredcodec": "wav",
-                # preferredquality ignored for WAV; kept for compatibility
-                "preferredquality": "192",
             }
         ],
         # Enforce PCM 16-bit + chosen rate/channels
-        "postprocessor_args": [
-            "-acodec", "pcm_s16le",
-            "-ar", str(args.ar),
-            "-ac", str(args.ac),
-        ],
+        "postprocessor_args": [],
         "skip_download": False,
         "ignoreerrors": False,
         "n_threads": 1,  # safer for first-result single download
