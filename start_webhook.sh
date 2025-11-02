@@ -3,9 +3,13 @@ set -e
 
 echo "🚀 Starting Omi Song Recognition Webhook..."
 
-# Install abracadabra package
+# Install abracadabra dependencies without PyAudio (not needed for webhook)
+echo "📦 Installing dependencies..."
+pip install click numpy pydub scipy tinytag
+
+# Install abracadabra package (skip dependencies since we installed them manually)
 echo "📦 Installing abracadabra package..."
-pip install -e .
+pip install -e . --no-deps
 
 # Initialize database if it doesn't exist
 if [ ! -f "abracadabra.db" ]; then
