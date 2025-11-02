@@ -78,20 +78,26 @@ def store_song_supabase(song_id: str, artist: str, album: str, title: str):
         print(f"Error storing song: {e}")
         return False
 
-def store_fingerprints_supabase(song_id: str, fingerprints: List[Tuple[int, int]]):
-    """Store fingerprints in Supabase"""
+def store_fingerprints_supabase(song_id: str, fingerprints: List[Tuple[int, int, str]]):
+    """Store fingerprints in Supabase
+    
+    Args:
+        song_id: The song ID (ignored, uses the one from fingerprints)
+        fingerprints: List of (hash, time_offset, song_id) tuples from fingerprint_file()
+    """
     if not supabase:
         return False
 
     try:
         # Batch insert fingerprints
+        # Fingerprints come as (hash, time_offset, song_id) tuples
         data = [
             {
                 "fingerprint_hash": fp_hash,
-                "time_offset": time_offset,
-                "song_id": song_id
+                "time_offset": float(time_offset),
+                "song_id": fp_song_id
             }
-            for fp_hash, time_offset in fingerprints
+            for fp_hash, time_offset, fp_song_id in fingerprints
         ]
 
         # Insert in batches of 1000
@@ -186,14 +192,14 @@ def get_song_id_from_path(filepath: str) -> str:
     return hashlib.md5(filename.encode()).hexdigest()
 
 
-def store_song_complete(song_id: str, fingerprints: List[Tuple[int, int]],
+def store_song_complete(song_id: str, fingerprints: List[Tuple[int, int, str]],
                        artist: str, album: str, title: str) -> bool:
     """
     Store both song metadata and fingerprints in Supabase.
 
     Args:
-        song_id: Unique identifier for the song
-        fingerprints: List of (hash, time_offset) tuples
+        song_id: Unique identifier for the song (ignored, uses one from fingerprints)
+        fingerprints: List of (hash, time_offset, song_id) tuples from fingerprint_file()
         artist: Artist name
         album: Album name
         title: Song title
