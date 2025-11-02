@@ -1,7 +1,12 @@
 [build]
-builder = "nixpacks"
+builder = "NIXPACKS"
 
 [deploy]
 startCommand = "bash start_webhook.sh"
-restartPolicyType = "on_failure"
+healthcheckPath = "/health"
+healthcheckTimeout = 100
+restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
+
+[nixpacks]
+pythonVersion = "3.11"

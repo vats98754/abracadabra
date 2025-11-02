@@ -3,11 +3,11 @@ set -e
 
 echo "🚀 Starting Omi Song Recognition Webhook..."
 
-# Install abracadabra dependencies without PyAudio (not needed for webhook)
-echo "📦 Installing dependencies..."
-pip install click numpy pydub scipy tinytag
+# Install minimal webhook dependencies (uses requirements-webhook.txt instead of requirements.txt)
+echo "📦 Installing webhook dependencies..."
+pip install -r requirements-webhook.txt
 
-# Install abracadabra package (skip dependencies since we installed them manually)
+# Install abracadabra package (skip dependencies since we installed them already)
 echo "📦 Installing abracadabra package..."
 pip install -e . --no-deps
 
