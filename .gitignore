@@ -12,3 +12,5 @@ abracadabra.egg-info/
 .env
 .env.local
 *.env
+# Downloaded audio files
+dataset/downloads/

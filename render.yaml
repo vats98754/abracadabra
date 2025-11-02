@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: omi-webhook
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements-webhook.txt && pip install -e . --no-deps && song_recogniser initialise || echo "Database will initialize at runtime"
+    startCommand: uvicorn omi_song_recognition_webhook:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: OMI_APP_ID
+        sync: false
+      - key: OMI_API_KEY
+        sync: false
+      - key: OMI_USER_ID
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: ABRACADABRA_PATH
+        value: /opt/render/project/src
+      - key: MIN_AUDIO_LENGTH
+        value: 10
+      - key: MAX_BUFFER_DURATION
+        value: 60
+      - key: HOST
+        value: 0.0.0.0
