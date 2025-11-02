@@ -4,7 +4,7 @@ from multiprocessing import Pool, Lock, current_process
 import numpy as np
 from tinytag import TinyTag
 from . import settings
-from .record import record_audio
+# Lazy import record_audio only when needed (requires pyaudio)
 from .fingerprint import fingerprint_file, fingerprint_audio
 from .storage import store_song, get_matches, get_info_for_song_id, song_in_db, checkpoint_db
 
@@ -177,6 +177,8 @@ def listen_to_song(filename=None):
     :returns: :func:`~abracadabra.recognise.get_song_info` result for matched song or None.
     :rtype: tuple(str, str, str)
     """
+    # Import record_audio only when needed (requires pyaudio)
+    from .record import record_audio
     audio = record_audio(filename=filename)
     hashes = fingerprint_audio(audio)
     matches = get_matches(hashes)

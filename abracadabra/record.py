@@ -1,12 +1,18 @@
 import os
 import wave
 import threading
-import pyaudio
 import numpy as np
+
+try:
+    import pyaudio
+    PYAUDIO_AVAILABLE = True
+except ImportError:
+    pyaudio = None
+    PYAUDIO_AVAILABLE = False
 
 CHUNK = 1024
 """Number of frames to buffer before writing."""
-FORMAT = pyaudio.paInt16
+FORMAT = pyaudio.paInt16 if PYAUDIO_AVAILABLE else None
 """The data type used to record audio. See ``pyaudio`` for constants."""
 CHANNELS = 1
 """The number of channels to record."""

@@ -13,3 +13,9 @@ hash.sql
 **hash.db*
 **node_modules*
 **package*
+# Environment variables
+.env
+.env.local
+*.env
+# Downloaded audio files
+dataset/downloads/
