@@ -145,11 +145,15 @@ def recognize_song(audio_file: str) -> dict:
         # Get song metadata from Supabase
         song_info = supabase_storage.get_song_info_supabase(song_id)
         if not song_info:
-            logger.error(f"Song {song_id} not found in database")
+            logger.error(f"Song {song_id} not found in song_info table")
+            logger.error(f"This likely means the song was fingerprinted but metadata wasn't stored")
+            logger.error(f"To fix: re-register the song using /register endpoint")
             return None
 
         artist, album, title = song_info
         confidence = calculate_confidence(score)
+        
+        logger.info(f"✅ Song identified: {artist} - {title} (confidence: {confidence:.0%}, score: {score})")
 
         return {
             'artist': artist if artist != 'Unknown' else None,
@@ -223,20 +227,19 @@ def send_notification_to_user(uid: str, song_info: dict) -> bool:
     logger.info(f"Sending notification to user {uid}: {message}")
 
     try:
-        # Official Omi notification endpoint
-        url = f"https://api.omi.me/v2/integrations/{OMI_APP_ID}/notification"
+        # Official Omi notification endpoint (query params in URL, empty body)
+        import urllib.parse
+        
+        encoded_message = urllib.parse.quote(message)
+        url = f"https://api.omi.me/v2/integrations/{OMI_APP_ID}/notification?uid={uid}&message={encoded_message}"
 
         headers = {
             "Authorization": f"Bearer {OMI_API_KEY}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "Content-Length": "0"
         }
 
-        params = {
-            "uid": uid,
-            "message": message
-        }
-
-        response = requests.post(url, headers=headers, params=params, timeout=30)
+        response = requests.post(url, headers=headers, timeout=30)
         response.raise_for_status()
 
         logger.info(f"✅ Notification sent successfully to {uid}")
@@ -504,13 +507,18 @@ async def register_song(
             final_album = album_meta or "Unknown"
             final_title = title or title_meta or os.path.splitext(file.filename)[0]
 
-            # Generate song ID
-            song_id = supabase_storage.get_song_id_from_path(tmp_path)
+            # Extract the actual song_id from fingerprints (UUID-based)
+            # This ensures consistency with the fingerprints stored in hashes table
+            actual_song_id = song_fingerprint[0][2] if song_fingerprint else None
+            
+            if not actual_song_id:
+                raise Exception("Failed to extract song_id from fingerprints")
 
             # Store in Supabase database
             logger.info(f"Storing {len(song_fingerprint)} fingerprints in Supabase for: {final_artist} - {final_title}")
+            logger.info(f"Using song_id from fingerprints: {actual_song_id}")
             success = supabase_storage.store_song_complete(
-                song_id, song_fingerprint, final_artist, final_album, final_title
+                actual_song_id, song_fingerprint, final_artist, final_album, final_title
             )
 
             # Clean up
@@ -528,7 +536,7 @@ async def register_song(
                     "artist": final_artist,
                     "title": final_title,
                     "fingerprints": len(song_fingerprint),
-                    "song_id": song_id
+                    "song_id": actual_song_id  # Return the UUID-based song_id
                 },
                 status_code=200
             )

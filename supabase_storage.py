@@ -198,7 +198,7 @@ def store_song_complete(song_id: str, fingerprints: List[Tuple[int, int, str]],
     Store both song metadata and fingerprints in Supabase.
 
     Args:
-        song_id: Unique identifier for the song (ignored, uses one from fingerprints)
+        song_id: Unique identifier for the song (IGNORED - uses song_id from fingerprints)
         fingerprints: List of (hash, time_offset, song_id) tuples from fingerprint_file()
         artist: Artist name
         album: Album name
@@ -212,13 +212,22 @@ def store_song_complete(song_id: str, fingerprints: List[Tuple[int, int, str]],
         return False
 
     try:
-        # Store song metadata
-        success = store_song_supabase(song_id, artist, album, title)
+        # Extract the actual song_id from fingerprints (they all have the same song_id)
+        # This ensures consistency between song_info and hashes tables
+        if not fingerprints or len(fingerprints) == 0:
+            print("⚠️  No fingerprints provided")
+            return False
+        
+        actual_song_id = fingerprints[0][2]  # Get song_id from first fingerprint
+        print(f"📝 Storing song with ID: {actual_song_id} ({artist} - {title})")
+        
+        # Store song metadata with the actual song_id from fingerprints
+        success = store_song_supabase(actual_song_id, artist, album, title)
         if not success:
             return False
 
         # Store fingerprints
-        success = store_fingerprints_supabase(song_id, fingerprints)
+        success = store_fingerprints_supabase(actual_song_id, fingerprints)
         return success
     except Exception as e:
         print(f"Error storing song: {e}")
