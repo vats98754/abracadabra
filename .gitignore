@@ -6,3 +6,5 @@ venv/
 _build/
 tags
 abracadabra.egg-info/
+*.log
+/build
