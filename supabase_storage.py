@@ -18,8 +18,11 @@ else:
     supabase = None
 
 # SQL schema for Supabase tables
+# Matches abracadabra's SQLite structure:
+#   SQLite "hash" table → Supabase "fingerprints" table (hash int, offset real, song_id text)
+#   SQLite "song_info" table → Supabase "songs" table (artist text, album text, title text, song_id text)
 SCHEMA_SQL = """
--- Songs table
+-- Songs table (matches song_info)
 CREATE TABLE IF NOT EXISTS songs (
     id SERIAL PRIMARY KEY,
     song_id TEXT UNIQUE NOT NULL,
@@ -29,11 +32,12 @@ CREATE TABLE IF NOT EXISTS songs (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- Fingerprints table (hash table)
+-- Fingerprints table (matches hash table)
+-- IMPORTANT: time_offset is DOUBLE PRECISION (not INTEGER) for floating-point time values
 CREATE TABLE IF NOT EXISTS fingerprints (
     id SERIAL PRIMARY KEY,
     hash BIGINT NOT NULL,
-    time_offset INTEGER NOT NULL,
+    time_offset DOUBLE PRECISION NOT NULL,
     song_id TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT NOW(),
     FOREIGN KEY (song_id) REFERENCES songs(song_id) ON DELETE CASCADE
