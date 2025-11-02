@@ -10,11 +10,11 @@ CREATE TABLE IF NOT EXISTS song_info (
 );
 
 -- hashes table: stores audio fingerprint hashes
--- IMPORTANT: offset must be REAL/DOUBLE PRECISION (not INTEGER)
+-- IMPORTANT: time_offset must be REAL/DOUBLE PRECISION (not INTEGER)
 -- because it stores floating-point time values in seconds (e.g., 1.23456)
 CREATE TABLE IF NOT EXISTS hashes (
     fingerprint_hash BIGINT NOT NULL,
-    offset DOUBLE PRECISION NOT NULL,
+    time_offset DOUBLE PRECISION NOT NULL,
     song_id TEXT NOT NULL
 );
 

@@ -21,6 +21,7 @@ else:
 # Based on abracadabra's SQLite structure with PostgreSQL-safe naming:
 #   SQLite "hash" table → Supabase "hashes" table
 #   SQLite "hash" column → Supabase "fingerprint_hash" column (avoids keyword)
+#   SQLite "offset" column → Supabase "time_offset" column (avoids keyword)
 SCHEMA_SQL = """
 -- song_info table
 CREATE TABLE IF NOT EXISTS song_info (
@@ -30,11 +31,11 @@ CREATE TABLE IF NOT EXISTS song_info (
     song_id TEXT
 );
 
--- hashes table (avoids "hash" keyword)
--- IMPORTANT: offset is DOUBLE PRECISION (not INTEGER) for floating-point time values
+-- hashes table (avoids "hash" and "offset" keywords)
+-- IMPORTANT: time_offset is DOUBLE PRECISION (not INTEGER) for floating-point time values
 CREATE TABLE IF NOT EXISTS hashes (
     fingerprint_hash BIGINT NOT NULL,
-    offset DOUBLE PRECISION NOT NULL,
+    time_offset DOUBLE PRECISION NOT NULL,
     song_id TEXT NOT NULL
 );
 
@@ -87,7 +88,7 @@ def store_fingerprints_supabase(song_id: str, fingerprints: List[Tuple[int, int]
         data = [
             {
                 "fingerprint_hash": fp_hash,
-                "offset": time_offset,
+                "time_offset": time_offset,
                 "song_id": song_id
             }
             for fp_hash, time_offset in fingerprints
