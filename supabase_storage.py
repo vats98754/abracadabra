@@ -18,11 +18,11 @@ else:
     supabase = None
 
 # SQL schema for Supabase tables
-# Uses EXACT same names as abracadabra's SQLite structure:
-#   "hash" table (hash int, offset real, song_id text)
-#   "song_info" table (artist text, album text, title text, song_id text)
+# Based on abracadabra's SQLite structure with PostgreSQL-safe naming:
+#   SQLite "hash" table → Supabase "hashes" table
+#   SQLite "hash" column → Supabase "fingerprint_hash" column (avoids keyword)
 SCHEMA_SQL = """
--- song_info table (EXACT MATCH to SQLite)
+-- song_info table
 CREATE TABLE IF NOT EXISTS song_info (
     artist TEXT,
     album TEXT,
@@ -30,16 +30,16 @@ CREATE TABLE IF NOT EXISTS song_info (
     song_id TEXT
 );
 
--- hash table (EXACT MATCH to SQLite)
+-- hashes table (avoids "hash" keyword)
 -- IMPORTANT: offset is DOUBLE PRECISION (not INTEGER) for floating-point time values
-CREATE TABLE IF NOT EXISTS hash (
-    hash BIGINT NOT NULL,
+CREATE TABLE IF NOT EXISTS hashes (
+    fingerprint_hash BIGINT NOT NULL,
     offset DOUBLE PRECISION NOT NULL,
     song_id TEXT NOT NULL
 );
 
 -- Index for fast lookup
-CREATE INDEX IF NOT EXISTS idx_hash ON hash(hash);
+CREATE INDEX IF NOT EXISTS idx_fingerprint_hash ON hashes(fingerprint_hash);
 """
 
 def init_supabase_tables():
@@ -86,7 +86,7 @@ def store_fingerprints_supabase(song_id: str, fingerprints: List[Tuple[int, int]
         # Batch insert fingerprints
         data = [
             {
-                "hash": fp_hash,
+                "fingerprint_hash": fp_hash,
                 "offset": time_offset,
                 "song_id": song_id
             }
@@ -97,7 +97,7 @@ def store_fingerprints_supabase(song_id: str, fingerprints: List[Tuple[int, int]
         batch_size = 1000
         for i in range(0, len(data), batch_size):
             batch = data[i:i+batch_size]
-            supabase.table("hash").insert(batch).execute()
+            supabase.table("hashes").insert(batch).execute()
 
         return True
     except Exception as e:
@@ -147,16 +147,16 @@ def get_matches_supabase(fingerprints: List[Tuple[int, int]]) -> List[str]:
 
     try:
         # Extract just the hashes for matching
-        hashes = [fp[0] for fp in fingerprints]
+        hash_values = [fp[0] for fp in fingerprints]
 
         # Query database for matching hashes (batch query)
         # Note: Supabase has a limit on IN clause size, so we batch if needed
         batch_size = 1000
         all_matches = []
 
-        for i in range(0, len(hashes), batch_size):
-            batch_hashes = hashes[i:i+batch_size]
-            result = supabase.table("hash").select("song_id").in_("hash", batch_hashes).execute()
+        for i in range(0, len(hash_values), batch_size):
+            batch_hashes = hash_values[i:i+batch_size]
+            result = supabase.table("hashes").select("song_id").in_("fingerprint_hash", batch_hashes).execute()
 
             if result.data:
                 all_matches.extend([row['song_id'] for row in result.data])
